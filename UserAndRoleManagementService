@@ -1,0 +1,104 @@
+# -*- encoding: utf-8 -*-
+import logging
+from suds.client import Client
+import requests
+logging.basicConfig(level=logging.INFO)
+logging.getLogger('suds.client').setLevel(logging.DEBUG)
+class jasper_user(object):
+    def create_delete_user(self,username,password,fullname,emp_id,enabled,create=False,delete=False):
+#        url = url_port+'/jasperserver-pro/services/UserAndRoleManagementService?wsdl'
+        res = {}
+        if create==False and delete==False:
+            res = {'error':True ,'message':'Select either Create or Delete'}
+            return res
+        elif create == True and delete == True:
+            res = {'error':True ,'message':'Select either Create or Delete'}
+            return res
+        url = 'http://localhost:8080/jasperserver-pro/services/UserAndRoleManagementService?wsdl'
+        try:
+            client = Client(url,username='jasperadmin',password='jasperadmin')
+        except Exception, e:
+            res = {'error':True ,'message':e}
+            return res
+
+        if delete == True:
+                ####to search user#########
+            search_user= client.factory.create('WSUserSearchCriteria')
+            search_user.name = username
+            search_user.tenantId = 'organization_1'
+            search_user.includeSubOrgs = False
+            search_user.maxRecords = 10
+            if not search_user:
+                res = {'error':True ,'message':'No such User defined'}
+                return res
+        #print client
+        user = client.factory.create('WSUser')
+        #print user
+        user.username = username
+        user.password = password
+        user.fullName = fullname
+        #user.roles = role
+        user.tenantId = 'organization_1'
+        user.enabled = enabled
+        if create == True and delete == False:
+            result = client.service.putUser(user)
+            data_xml = """<attributes><attribute><name>employee_id</name><value>%s</value></attribute></attributes>"""%emp_id
+            att_url = 'http://localhost:8080/jasperserver-pro/rest_v2/organizations/organization_1/users/'+username+'/attributes'
+            response = requests.put(att_url,
+                                    data=data_xml,
+				    auth=('jasperadmin', 'jasperadmin'),
+				    headers={'content-type':'application/xml'},
+					)
+        elif create == False and delete == True:
+            result = client.service.deleteUser(user)
+        
+        if result and create:
+            res = {'error':False ,'message':'Done'}
+            return res
+        if not result and delete:
+            res = {'error':False ,'message':'Done'}
+            return res
+        res = {'error':True ,'message':"Couldn't perform operation"}
+        return res
+    def edit_user(self,username,password,fullname,enabled):
+        res={}
+        url = 'http://localhost:8080/jasperserver-pro/services/UserAndRoleManagementService?wsdl'
+        try:
+            client = Client(url,username='jasperadmin',password='jasperadmin')
+        except Exception, e:
+            res = {'error':True ,'message':e}
+            return res
+         ####search user before editing to check existence####
+        search_user= client.factory.create('WSUserSearchCriteria')
+        search_user.name = 'username'
+        search_user.tenantId = 'organization_1'
+        search_user.includeSubOrgs = False
+        search_user.maxRecords = 10
+        print "search_user",search_user
+        if not search_user:
+            res = {'error':True ,'message':'No such User defined'}
+            return res
+        #####Give the 'ROLE_USER' as default role when editing#####
+        #####Jasper does not allow to Login after editing user if the role is not specified during editing###########
+        #####Reason:if not specified during editing then the role is written blank##########
+        role = client.factory.create('WSRole')
+        role.roleName = 'ROLE_USER'
+        print role
+        ####using the same putUser method to edit the jasper user####
+        user = client.factory.create('WSUser')
+        #print user
+        user.username = username
+        user.password = password
+        user.fullName = fullname
+        user.roles = [role]
+        user.tenantId = 'organization_1'
+        user.enabled = enabled
+        result = client.service.putUser(user)
+
+        if not result:
+            res = {'error':True ,'message':"Couldn't perform operation"}
+            return res
+        else:
+            res = {'error':False ,'message':"Done"}
+            return res
+jasper_user()
